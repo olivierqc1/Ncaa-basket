@@ -305,8 +305,7 @@ class NCAATeamDataCollector:
         if best_score >= 0.6:
             print(f"   🔍 Match fuzzy: '{team_name}' → '{best_match}' ({best_score:.2f})")
             return all_stats[best_match]
-
-        print(f"   ⚠️  Équipe non trouvée: {team_name} - stats par défaut")
+print(f"   ⚠️  Équipe non trouvée: {team_name} - stats par défaut")
         return self._default_team_stats(team_name)
 
     def _default_team_stats(self, team_name):
@@ -530,4 +529,85 @@ class NCAATeamDataCollector:
                 schedule = Schedule(team_abbr, year=self.season_year)
                 df = schedule.dataframe
 
-                if 
+                if df is None or len(df) == 0:
+                    continue
+
+                # Garde les matchs terminés
+                completed = df[df['points_scored'].notna()].copy()
+
+                for _, row in completed.iterrows():
+                    all_games.append({
+                        'home_team': team_abbr if row.get('location', 'Home') != 'Away' else row.get('opponent_id', 'UNK'),
+                        'away_team': row.get('opponent_id', 'UNK') if row.get('location', 'Home') != 'Away' else team_abbr,
+                        'home_score': float(row.get('points_scored', 0)) if row.get('location', 'Home') != 'Away' else float(row.get('opponent_points', 0)),
+                        'away_score': float(row.get('opponent_points', 0)) if row.get('location', 'Home') != 'Away' else float(row.get('points_scored', 0)),
+                        'total_points': float(row.get('points_scored', 0)) + float(row.get('opponent_points', 0)),
+                        'date': str(row.get('date', ''))
+                    })
+
+                time.sleep(0.5)
+
+            except Exception as e:
+                print(f"   ⚠️  {team_abbr}: {e}")
+                continue
+
+        if len(all_games) < 50:
+            print("   ⚠️  Données insuffisantes - complétion avec données simulées")
+            return self._generate_mock_training_data()
+
+        df = pd.DataFrame(all_games).drop_duplicates()
+        print(f"   ✅ {len(df)} matchs historiques collectés")
+        return df
+
+    def _generate_mock_training_data(self, n_games=500):
+        """Génère données d'entraînement simulées basées sur les distributions NCAA réelles"""
+        print(f"   ℹ️  Génération {n_games} matchs simulés pour entraînement")
+
+        np.random.seed(42)
+        all_stats = self._get_mock_barttorvik_stats()
+        teams = list(all_stats.keys())
+
+        records = []
+        for _ in range(n_games):
+            home_team = np.random.choice(teams)
+            away_team = np.random.choice([t for t in teams if t != home_team])
+
+            h = all_stats[home_team]
+            a = all_stats[away_team]
+
+            # Modèle de prédiction basé sur pace/efficiency
+            avg_tempo = (h['adj_tempo'] + a['adj_tempo']) / 2
+            possessions = avg_tempo * (40 / 40)  # per game
+
+            home_score = possessions * (h['adj_oe'] * (a['adj_de'] / NCAA_NATIONAL_AVG_DE)) / 100
+            away_score = possessions * (a['adj_oe'] * (h['adj_de'] / NCAA_NATIONAL_AVG_DE)) / 100
+
+            # Home court advantage +3.5 pts
+            home_score += 3.5
+
+            # Bruit aléatoire
+            home_score += np.random.normal(0, 8)
+            away_score += np.random.normal(0, 8)
+
+            home_score = max(40, home_score)
+            away_score = max(40, away_score)
+
+            records.append({
+                'home_team': home_team,
+                'away_team': away_team,
+                'home_adj_oe': h['adj_oe'],
+                'home_adj_de': h['adj_de'],
+                'home_adj_tempo': h['adj_tempo'],
+                'home_win_pct': h['win_pct'],
+                'away_adj_oe': a['adj_oe'],
+                'away_adj_de': a['adj_de'],
+                'away_adj_tempo': a['adj_tempo'],
+                'away_win_pct': a['win_pct'],
+                'home_score': round(home_score, 1),
+                'away_score': round(away_score, 1),
+                'total_points': round(home_score + away_score, 1),
+                'home_won': int(home_score > away_score),
+                'point_diff': round(home_score - away_score, 1)
+            })
+
+        return pd.DataFrame(records)
