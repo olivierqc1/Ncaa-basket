@@ -1,4 +1,4 @@
-const API_URL = 'https://ncaa-betting.onrender.com'; // ← Mettre à jour avec ton URL Render
+const API_URL = 'https://ncaa-basket.onrender.com/';
 
 async function scanOpportunities(statType) {
     const minEdge = document.getElementById('minEdge').value;
