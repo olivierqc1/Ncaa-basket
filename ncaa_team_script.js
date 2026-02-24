@@ -1,4 +1,4 @@
-const API_URL = 'https://ncaa-team-betting.onrender.com'; // ← Mettre à jour avec ton URL Render
+const API_URL = 'https://ncaa-basket.onrender.com/'; // ← Mettre à jour avec ton URL Render
 
 // ============================================================================
 // SCAN MATCHS DU JOUR
